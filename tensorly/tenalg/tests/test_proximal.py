@@ -1,7 +1,7 @@
 import numpy as np
 
 from ... import backend as T
-from ..proximal import svd_thresholding, soft_thresholding, hals_nnls, fista, active_set_nnls
+from ..proximal import svd_thresholding, soft_thresholding, hals_nnls, fista, active_set_nnls, admm
 from ..proximal import procrustes
 from ...testing import assert_array_equal, assert_array_almost_equal
 from tensorly import tensor_to_vec
@@ -93,6 +93,18 @@ def test_fista():
     x_fista = fista(atb, ata, tol=10e-16, n_iter_max=5000)
     assert_array_almost_equal(true_res, x_fista, decimal=2)
 
+
+def test_admm():
+    """Test for admm operator"""
+    a = T.tensor(np.random.rand(10, 10))
+    true_res = T.tensor(np.random.rand(10, 1))
+    b = T.dot(a, true_res)
+    atb = T.dot(T.transpose(a), b)
+    dual = tl.zeros(tl.shape(atb))
+    ata = T.dot(T.transpose(a), a)
+    x_as = admm(atb, ata, )
+    x_as = T.reshape(x_as, T.shape(atb))
+    assert_array_almost_equal(true_res, x_as, decimal=2)
 
 @skip_tensorflow
 def test_active_set_nnls():

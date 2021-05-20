@@ -1,13 +1,13 @@
 import numpy as np
 import warnings
-from tensorly.decomposition._cp import error_calc, initialize_cp
+
 import tensorly as tl
-from tensorly.random import random_cp
-from tensorly.base import unfold
-from tensorly.cp_tensor import (CPTensor, cp_norm,
-                                unfolding_dot_khatri_rao,
-                                validate_cp_rank)
-from proximal import ADMM, proximal_operator
+from ..random import random_cp
+from ..base import unfold
+from ..cp_tensor import (cp_to_tensor, CPTensor,
+                         unfolding_dot_khatri_rao, cp_norm,
+                         cp_normalize, validate_cp_rank)
+from ..tenalg.proximal import admm, proximal_operator
 
 # Author: Jean Kossaifi
 #         Jeremy Cohen <jeremy.cohen@irisa.fr>
@@ -32,7 +32,8 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par,
     tensor : ndarray
     rank : int
     constraints : string
-    constraint_parameters : float
+    reg_par : float
+    prox_par : float
     random_state : {None, int, np.random.RandomState}
     init : {'svd', 'random', cptensor}, optional
     svd : str, default is 'numpy_svd'
@@ -51,7 +52,7 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par,
         reg_par = [reg_par] * n_modes
     if prox_par is None or len(prox_par) != n_modes:
         prox_par = [prox_par] * n_modes
-    
+
     if init == 'random':
         weights, factors = random_cp(tl.shape(tensor), rank, normalise_factors=False, **tl.context(tensor))
 
@@ -60,7 +61,7 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par,
             svd_fun = tl.SVD_FUNS[svd]
         except KeyError:
             message = 'Got svd={}. However, for the current backend ({}), the possible choices are {}'.format(
-                      svd, tl.get_backend(), tl.SVD_FUNS)
+                svd, tl.get_backend(), tl.SVD_FUNS)
             raise ValueError(message)
 
         factors = []
@@ -73,7 +74,8 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par,
                 U = tl.index_update(U, tl.index[:, :idx], U[:, :idx] * S[:idx])
 
             if tensor.shape[mode] < rank:
-                random_part = tl.tensor(rng.random_sample((U.shape[0], rank - tl.shape(tensor)[mode])), **tl.context(tensor))
+                random_part = tl.tensor(rng.random_sample((U.shape[0], rank - tl.shape(tensor)[mode])),
+                                        **tl.context(tensor))
                 U = tl.concatenate([U, random_part], axis=1)
 
             factors.append(U[:, :rank])
@@ -95,9 +97,9 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par,
             )
     else:
         raise ValueError('Initialization method "{}" not recognized'.format(init))
-    
+
     for i in range(n_modes):
-            factors[i] = proximal_operator(factors[i], constraint=constraints[i], reg_par=reg_par[i], prox_par=prox_par[i])
+        factors[i] = proximal_operator(factors[i], constraint=constraints[i], reg_par=reg_par[i], prox_par=prox_par[i])
     kt = CPTensor((None, factors))
     return kt
 
@@ -110,9 +112,9 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
                         prox_par=None,
                         cvg_criterion='abs_rec_error',
                         fixed_modes=None):
-    """CANDECOMP/PARAFAC decomposition via alternating optimization of 
+    """CANDECOMP/PARAFAC decomposition via alternating optimization of
     alternating direction method of multipliers (AO-ADMM):
-    
+
     Computes a rank-`rank` decomposition of `tensor` [1]_ such that::
         tensor = [|weights; factors[0], ..., factors[-1] |].
 
@@ -156,7 +158,7 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
     fixed_modes : list, default is None
         A list of modes for which the initial value is not modified.
         The last mode cannot be fixed due to error computation.
-    
+
     Returns
     -------
     CPTensor : (weight, factors)
@@ -168,7 +170,7 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
     ----------
     .. [1] T.G.Kolda and B.W.Bader, "Tensor Decompositions and Applications", SIAM
            REVIEW, vol. 51, n. 3, pp. 455-500, 2009.
-    .. [2] Huang, Kejun, Nicholas D. Sidiropoulos, and Athanasios P. Liavas. 
+    .. [2] Huang, Kejun, Nicholas D. Sidiropoulos, and Athanasios P. Liavas.
            "A flexible and efficient algorithmic framework for constrained matrix and tensor factorization." IEEE
            Transactions on Signal Processing 64.19 (2016): 5052-5065.
     """
@@ -189,7 +191,6 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
 
     rec_errors = []
     norm_tensor = tl.norm(tensor, 2)
-    #Id = tl.eye(rank, **tl.context(tensor)) * l2_reg
 
     if fixed_modes is None:
         fixed_modes = []
@@ -199,7 +200,8 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
                       'The last mode will not be fixed. Consider using tl.moveaxis()')
         fixed_modes.remove(tl.ndim(tensor) - 1)
     modes_list = [mode for mode in range(tl.ndim(tensor)) if mode not in fixed_modes]
-    #ADMM inits
+
+    # ADMM inits
     dual_var = []
     factors_t = []
     constraint_error_all = []
@@ -218,17 +220,17 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
             for i, factor in enumerate(factors):
                 if i != mode:
                     pseudo_inverse = pseudo_inverse * tl.dot(tl.transpose(factor), factor)
-            #pseudo_inverse += Id
 
             mttkrp = unfolding_dot_khatri_rao(tensor, (None, factors), mode)
 
-            factor, factors_t[mode], dual_var[mode] = ADMM(mttkrp, pseudo_inverse, factors[mode], dual_var[mode], n_iter_max=n_iter_max, constraint=constraints[mode],
-                                                       reg_par=reg_par[mode], prox_par=prox_par[mode], tol=tol_abs)
+            factor, factors_t[mode], dual_var[mode] = admm(mttkrp, pseudo_inverse, factors[mode], dual_var[mode],
+                                                           n_iter_max=n_iter_max, constraint=constraints[mode],
+                                                           reg_par=reg_par[mode], prox_par=prox_par[mode], tol=tol_abs)
             factors[mode] = factor
 
         factors_norm = cp_norm((weights, factors))
         iprod = tl.sum(tl.sum(mttkrp * factor, axis=0) * weights)
-        rec_error = tl.sqrt(tl.abs(norm_tensor**2 + factors_norm**2 - 2 * iprod)) / norm_tensor
+        rec_error = tl.sqrt(tl.abs(norm_tensor ** 2 + factors_norm ** 2 - 2 * iprod)) / norm_tensor
         rec_errors.append(rec_error)
         constraint_error = tl.zeros(len(modes_list))
         for mode in modes_list:
@@ -243,7 +245,7 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
                     print("iteration {}, reconstruction error: {}, decrease = {}, unnormalized = {}".format(iteration,
                                                                                                             rec_error,
                                                                                                             rec_error_decrease))
-                    
+
                 if constraint_error_all[-1] < tol_rel:
                     break
                 if cvg_criterion == 'abs_rec_error':

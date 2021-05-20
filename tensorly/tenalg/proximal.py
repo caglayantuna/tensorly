@@ -1,4 +1,5 @@
 import tensorly as tl
+import numpy as np 
 
 # Author: Jean Kossaifi
 #         Jeremy Cohen <jeremy.cohen@irisa.fr>
@@ -8,7 +9,7 @@ import tensorly as tl
 # License: BSD 3 clause
 
 
-def proximal_operator(H, constraint, reg_par=None, prox_par=None):
+def proximal_operator(tensor, constraint, reg_par=None, prox_par=None):
     """
     Proximal operator solves a convex optimization problem. Let f be a
     convex function, proximal operator of f is :math:`\\argmin(f(x) + 1/2||x - v||_2^2)`.
@@ -17,7 +18,7 @@ def proximal_operator(H, constraint, reg_par=None, prox_par=None):
 
     Parameters
     ----------
-    H : ndarray
+    tensor : ndarray
     constraint : string
              Constraint options : nonnegative, sparse_l1, l2, unimodality,
                                   normalize, simplex, normalized_sparsity,
@@ -30,7 +31,8 @@ def proximal_operator(H, constraint, reg_par=None, prox_par=None):
              Default : None
     Returns
     -------
-    H : updated H according to the constraint. If constraints is None, function returns the same H.
+    tensor : updated tensor according to the selected constraint.
+             If constraint is None, function returns the same tensor.
 
     References
     ----------
@@ -44,27 +46,30 @@ def proximal_operator(H, constraint, reg_par=None, prox_par=None):
     if prox_par is None:
         prox_par = 1e-3
     if constraint is None:
-        return H
+        return tensor
     elif constraint == 'nonnegative':
-        return tl.clip(H, 0, tl.max(H))
+        return tl.clip(tensor, 0, tl.max(tensor))
     elif constraint == 'sparse_l1':
-        return soft_thresholding(H, reg_par)
+        return soft_thresholding(tensor, reg_par)
     elif constraint == 'l2':
-        return l2_prox(H, reg_par)
+        return l2_prox(tensor, reg_par)
+    elif constraint == 'l2_square':
+        return l2_prox(tensor, reg_par)
     elif constraint == 'unimodality':
-        return unimodality(H)
+        return unimodality(tensor)
     elif constraint == 'normalize':
-        return H / tl.max(H)
+        return tensor / tl.max(tensor)
     elif constraint == 'simplex':
-        return simplex(H)
+        return simplex(tensor)
     elif constraint == 'normalized_sparsity':
-        return normalized_sparsity(H, prox_par)
+        return normalized_sparsity(tensor, prox_par)
     elif constraint == 'soft_sparsity':
-        return soft_sparsity(H, prox_par)
+        return soft_sparsity(tensor, prox_par)
     elif constraint == 'smoothness':
-        return smoothness(H)
-    elif constraint == 'monotoncity':
-        return monotonicity(H)
+        return smoothness(tensor)
+    elif constraint == 'monotonicity':
+        return monotonicity(tensor)
+
 
 def smoothness(tensor):
     """
@@ -83,6 +88,7 @@ def smoothness(tensor):
 
     """
     return tl.copy(tensor)
+
 
 def monotonicity(tensor, decreasing=True):
     """
@@ -130,6 +136,28 @@ def unimodality(tensor):
             A Journal of the Chemometrics Society, 12(4), 223-247.
     """
     return tensor
+
+
+def squared_l2_prox(tensor, parameter):
+    """
+    Proximal operator of the squared l2 (||.||^2) norm.
+
+    Parameters
+    ----------
+    tensor : ndarray
+    parameter : float
+
+    Returns
+    -------
+    ndarray
+
+    References
+    ----------
+    .. [1]: Combettes, P. L., & Pesquet, J. C. (2011). Proximal splitting methods in signal processing.
+            In Fixed-point algorithms for inverse problems in science and engineering (pp. 185-212).
+            Springer, New York, NY.
+    """
+    return tensor/(1 + parameter)
 
 
 def l2_prox(tensor, parameter):
@@ -244,7 +272,7 @@ def simplex(tensor):
 
     """
     _, col = tl.shape(tensor)
-    tensor = tl.clip(H, 0, tl.max(tensor))
+    tensor = tl.clip(tensor, 0, tl.max(tensor))
     tensor_sort = tl.sort(tensor, axis=0, descending=True)
     tensor_cum = np.cumsum(tensor_sort, axis=0)
 
@@ -717,7 +745,7 @@ def active_set_nnls(Utm, UtU, x=None, n_iter_max=100, tol=10e-8):
     return x_vec
 
 
-def ADMM(UtM, pseudo_inverse, x, dual_var, n_iter_max=100, constraint=None, reg_par=None, prox_par=None, tol=1e-4):
+def admm(UtM, pseudo_inverse, x, dual_var, n_iter_max=100, constraint=None, reg_par=None, prox_par=None, tol=1e-4):
     """
     Alternating direction method of multipliers (AO-ADMM) algorithm to solve linear equation.
 
@@ -735,19 +763,21 @@ def ADMM(UtM, pseudo_inverse, x, dual_var, n_iter_max=100, constraint=None, reg_
         Maximum number of iteration
         Default: 100
     constraint : string, optional
-    constraint_parameter : float, optional
+    reg_par : float, optional
+    prox_par : float, optional
     tol : float
 
     Returns
     -------
     x : Updated ndarray
-    x_tilde :
+    x_dual :
     dual_var :
 
     References
     ----------
     .. [1] Huang, Kejun, Nicholas D. Sidiropoulos, and Athanasios P. Liavas.
-           "A flexible and efficient algorithmic framework for constrained matrix and tensor factorization." IEEE Transactions on Signal Processing 64.19 (2016): 5052-5065.
+           "A flexible and efficient algorithmic framework for constrained matrix and tensor factorization."
+           IEEE Transactions on Signal Processing 64.19 (2016): 5052-5065.
     """
     if reg_par is None:
         reg_par = 1
