@@ -26,6 +26,7 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par,
     initialize the `m`th factor matrix using the `rank` left singular vectors
     of the `m`th unfolding of the input tensor. If init is a previously initialized `cp tensor`, all
     the weights are pulled in the last factor and then the weights are set to "1" for the output tensor.
+    Lastly, factors are updated with proximal operator according to the selected constraint(s).
 
     Parameters
     ----------
@@ -104,8 +105,9 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par,
     return kt
 
 
-def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd',
-                        tol_rel=1e-8, tol_abs=1e-6, random_state=None,
+def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
+                        init='svd', svd='numpy_svd',
+                        tol_outer=1e-8, tol_inner=1e-6, random_state=None,
                         verbose=0, return_errors=False,
                         constraints=None,
                         reg_par=None,
@@ -124,18 +126,20 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
     rank  : int
         Number of components.
     n_iter_max : int
-        Maximum number of iteration
+        Maximum number of iteration for outer loop
+    n_iter_max_inner : int
+        Number of iteration for inner loop
     init : {'svd', 'random'}, optional
         Type of factor matrix initialization. See `initialize_factors`.
     svd : str, default is 'numpy_svd'
         function to use to compute the SVD, acceptable values in tensorly.SVD_FUNS
-    tol_rel : float, optional
-        (Default: 1e-8) Relative reconstruction error tolerance. The
+    tol_outer : float, optional
+        (Default: 1e-8) Relative reconstruction error tolerance for outer loop. The
         algorithm is considered to have found the global minimum when the
-        reconstruction error is less than `tol_rel`.
-    tol_abs : float, optional
+        reconstruction error is less than `tol_outer..
+    tol_inner : float, optional
         (Default: 1e-6) Absolute reconstruction error tolerance for factor update during
-        ADMM optimization.
+        inner loop, i.e. ADMM optimization.
     random_state : {None, int, np.random.RandomState}
     verbose : int, optional
         Level of verbosity
@@ -223,20 +227,19 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
 
             mttkrp = unfolding_dot_khatri_rao(tensor, (None, factors), mode)
 
-            factor, factors_t[mode], dual_var[mode] = admm(mttkrp, pseudo_inverse, factors[mode], dual_var[mode],
-                                                           n_iter_max=n_iter_max, constraint=constraints[mode],
-                                                           reg_par=reg_par[mode], prox_par=prox_par[mode], tol=tol_abs)
-            factors[mode] = factor
+            factors[mode], factors_t[mode], dual_var[mode] = admm(mttkrp, pseudo_inverse, factors[mode], dual_var[mode],
+                                                                  n_iter_max=n_iter_max_inner, constraint=constraints[mode],
+                                                                  reg_par=reg_par[mode], prox_par=prox_par[mode], tol=tol_inner)
 
         factors_norm = cp_norm((weights, factors))
-        iprod = tl.sum(tl.sum(mttkrp * factor, axis=0) * weights)
+        iprod = tl.sum(tl.sum(mttkrp * factors[-1], axis=0) * weights)
         rec_error = tl.sqrt(tl.abs(norm_tensor ** 2 + factors_norm ** 2 - 2 * iprod)) / norm_tensor
         rec_errors.append(rec_error)
         constraint_error = tl.zeros(len(modes_list))
         for mode in modes_list:
             constraint_error[mode] = tl.norm(factors[mode] - tl.transpose(factors_t[mode])) / tl.norm(factors[mode])
         constraint_error_all.append(tl.sum(constraint_error))
-        if tol_abs:
+        if tol_outer:
 
             if iteration >= 1:
                 rec_error_decrease = rec_errors[-2] - rec_errors[-1]
@@ -246,12 +249,12 @@ def constrained_parafac(tensor, rank, n_iter_max=100, init='svd', svd='numpy_svd
                                                                                                             rec_error,
                                                                                                             rec_error_decrease))
 
-                if constraint_error_all[-1] < tol_rel:
+                if constraint_error_all[-1] < tol_outer:
                     break
                 if cvg_criterion == 'abs_rec_error':
-                    stop_flag = abs(rec_error_decrease) < tol_rel
+                    stop_flag = abs(rec_error_decrease) < tol_outer
                 elif cvg_criterion == 'rec_error':
-                    stop_flag = rec_error_decrease < tol_rel
+                    stop_flag = rec_error_decrease < tol_outer
                 else:
                     raise TypeError("Unknown convergence criterion")
 

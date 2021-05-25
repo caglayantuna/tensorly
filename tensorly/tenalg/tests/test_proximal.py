@@ -11,7 +11,49 @@ import pytest
 
 skip_tensorflow = pytest.mark.skipif((T.get_backend() == "tensorflow"),
                                      reason=f"Indexing with list not supported in TensorFlow")
+def test_hard_thresholding():
+    """Test for hard_thresholding operator"""
+    U = T.tensor(np.random.rand(20, 10))
+    U_hard = hard_thresholding(U, 3)
+    true_res = U - 3
+    assert_array_almost_equal(true_res, U_hard)
 
+def test_soft_sparsity():
+    """Test for soft_sparsity operator"""
+    true_res = 10
+    U = T.tensor(np.random.rand(20, 10))
+    U_soft_sparsity = soft_sparsity(U, true_res)
+    res = tl.sum(U_soft_sparsity)
+    assert_array_almost_equal(true_res, res)
+
+def test_simplex():
+    """Test for simplex operator"""
+    U = T.tensor(np.random.rand(20, 10))
+    U_simplex = simplex(U)
+
+def test_normalized_sparsity():
+    """Test for normalized_sparsity operator"""
+    U = T.tensor(np.random.rand(20, 10))
+
+def test_monotonicity():
+    """Test for monotonicity operator"""
+    U = T.tensor(np.random.rand(20, 10))
+    U_monoton = monotonicity(U)
+    assert_(np.all(np.diff(U_monoton, axis=0) <= 0))
+
+def test_unimodality():
+    """Test for unimodality operator"""
+    U = T.tensor(np.random.rand(20, 10))
+
+def test_l2_prox():
+    """Test for l2 prox operator"""
+    U = T.tensor(np.random.rand(20, 10))
+
+def test_squared_l2_prox():
+    """Test for squared l2 prox operator"""
+    U = T.tensor(np.random.rand(20, 10))
+
+    
 def test_soft_thresholding():
     """Test for shrinkage"""
     # small test
@@ -96,15 +138,16 @@ def test_fista():
 
 def test_admm():
     """Test for admm operator"""
-    a = T.tensor(np.random.rand(10, 10))
-    true_res = T.tensor(np.random.rand(10, 1))
+    a = T.tensor(np.random.rand(20, 10))
+    true_res = T.tensor(np.random.rand(10, 10))
     b = T.dot(a, true_res)
     atb = T.dot(T.transpose(a), b)
-    dual = tl.zeros(tl.shape(atb))
     ata = T.dot(T.transpose(a), a)
-    x_as = admm(atb, ata, )
-    x_as = T.reshape(x_as, T.shape(atb))
-    assert_array_almost_equal(true_res, x_as, decimal=2)
+    dual = tl.zeros(tl.shape(atb))
+    x_init = tl.zeros(tl.shape(atb))
+    x_admm, _, _= admm(atb, ata, x=x_init, dual_var=dual)
+    assert_array_almost_equal(true_res, x_admm, decimal=2)
+
 
 @skip_tensorflow
 def test_active_set_nnls():

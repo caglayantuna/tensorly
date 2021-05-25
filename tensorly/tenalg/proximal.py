@@ -157,7 +157,7 @@ def squared_l2_prox(tensor, parameter):
             In Fixed-point algorithms for inverse problems in science and engineering (pp. 185-212).
             Springer, New York, NY.
     """
-    return tensor/(1 + parameter)
+    return tensor/(1 + 2 * parameter)
 
 
 def l2_prox(tensor, parameter):
@@ -790,7 +790,7 @@ def admm(UtM, pseudo_inverse, x, dual_var, n_iter_max=100, constraint=None, reg_
             x = proximal_operator(tl.transpose(x_dual) - dual_var, constraint=constraint, reg_par=reg_par / rho,
                                   prox_par=prox_par)
         else:
-            x = tl.transpose(tl.solve(tl.transpose(pseudo_inverse), tl.transpose(UtM)))
+            x = tl.solve(pseudo_inverse, UtM)
             return x, x_dual, dual_var
         dual_var = dual_var + x - tl.transpose(x_dual)
 
