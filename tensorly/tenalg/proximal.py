@@ -297,8 +297,7 @@ def hard_thresholding(tensor, threshold):
     -------
     ndarray
     """
-    tensor[tensor < threshold] = 0
-    return tensor
+    return tl.where(tensor < threshold, 0, tensor)
 
 
 def soft_thresholding(tensor, threshold):
@@ -790,7 +789,7 @@ def admm(UtM, pseudo_inverse, x, dual_var, n_iter_max=100, constraint=None, reg_
             x = proximal_operator(tl.transpose(x_dual) - dual_var, constraint=constraint, reg_par=reg_par / rho,
                                   prox_par=prox_par)
         else:
-            x = tl.solve(pseudo_inverse, UtM)
+            x = tl.transpose(tl.solve(tl.transpose(pseudo_inverse), tl.transpose(UtM)))
             return x, x_dual, dual_var
         dual_var = dual_var + x - tl.transpose(x_dual)
 
