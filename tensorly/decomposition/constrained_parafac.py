@@ -15,7 +15,7 @@ from ..tenalg.proximal import admm, proximal_operator
 
 # License: BSD 3 clause
 
-def initialize_constrained_parafac(tensor, rank, constraints, reg_par, prox_par, init, svd, random_state=None):
+def initialize_constrained_parafac(tensor, rank, constraints, reg_par=None, prox_par=None, init='svd', svd='numpy_svd', random_state=None):
     r"""Initialize factors used in `parafac`.
 
     Parameters
@@ -208,7 +208,6 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
     # ADMM inits
     dual_var = []
     factors_t = []
-    constraint_error_all = []
     for i in range(len(factors)):
         dual_var.append(tl.zeros(tl.shape(factors[i])))
         factors_t.append(tl.transpose(tl.zeros(tl.shape(factors[i]))))
@@ -235,10 +234,9 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
         iprod = tl.sum(tl.sum(mttkrp * factors[-1], axis=0) * weights)
         rec_error = tl.sqrt(tl.abs(norm_tensor ** 2 + factors_norm ** 2 - 2 * iprod)) / norm_tensor
         rec_errors.append(rec_error)
-        constraint_error = tl.zeros(len(modes_list))
+        constraint_error = 0
         for mode in modes_list:
-            constraint_error[mode] = tl.norm(factors[mode] - tl.transpose(factors_t[mode])) / tl.norm(factors[mode])
-        constraint_error_all.append(tl.sum(constraint_error))
+            constraint_error += tl.norm(factors[mode] - tl.transpose(factors_t[mode])) / tl.norm(factors[mode])
         if tol_outer:
 
             if iteration >= 1:
@@ -249,7 +247,7 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
                                                                                                             rec_error,
                                                                                                             rec_error_decrease))
 
-                if constraint_error_all[-1] < tol_outer:
+                if constraint_error < tol_outer:
                     break
                 if cvg_criterion == 'abs_rec_error':
                     stop_flag = abs(rec_error_decrease) < tol_outer

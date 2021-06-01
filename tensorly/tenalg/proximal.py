@@ -44,7 +44,8 @@ def proximal_operator(tensor, constraint, reg_par=None, prox_par=None):
     if reg_par is None:
         reg_par = 1e-3
     if prox_par is None:
-        prox_par = 1e-3
+        prox_par = 0.1
+
     if constraint is None:
         return tensor
     elif constraint == 'nonnegative':
@@ -60,7 +61,7 @@ def proximal_operator(tensor, constraint, reg_par=None, prox_par=None):
     elif constraint == 'normalize':
         return tensor / tl.max(tensor)
     elif constraint == 'simplex':
-        return simplex(tensor)
+        return simplex(tensor, prox_par)
     elif constraint == 'normalized_sparsity':
         return normalized_sparsity(tensor, prox_par)
     elif constraint == 'soft_sparsity':
@@ -73,6 +74,7 @@ def proximal_operator(tensor, constraint, reg_par=None, prox_par=None):
 
 def smoothness(tensor):
     """
+    Proximal operator for smoothness
 
     Parameters
     ----------
@@ -80,6 +82,7 @@ def smoothness(tensor):
 
     Returns
     -------
+    tensor : ndarray
 
     References
     ----------
@@ -98,13 +101,14 @@ def monotonicity(tensor, decreasing=True):
     Parameters
     ----------
     tensor : ndarray
-    decreasing : If it is True, function return monotone decreasing. Otherwise, returned array
+    decreasing : If it is True, function returns columnwise
+                 monotone decreasing tensor. Otherwise, returned array
                  will be monotone increasing.
-               Default: True
+                 Default: True
 
     Returns
     -------
-    H : Monotonic ndarray
+    tensor : Monotonic ndarray
 
     References
     ----------
@@ -135,7 +139,19 @@ def unimodality(tensor):
             unimodality and non‐negativity constraints. Journal of Chemometrics:
             A Journal of the Chemometrics Society, 12(4), 223-247.
     """
-    return tensor
+    if tl.ndim(tensor)==2:
+        _, col = tl.shape(tensor)
+    elif tl.ndim(tensor)==1:
+        tensor = tl.vec_to_tensor(tensor, [tl.shape(tensor)[0], 1])
+        col = 1
+
+    tensor_unimodal = tl.copy(tensor)
+    for i in range(col):
+        max_location = tl.argmax(tensor[:, i])
+        tensor_unimodal = tl.index_update(tensor_unimodal, tl.index[:max_location, i], np.maximum.accumulate(tensor[:max_location, i]))
+        tensor_unimodal = tl.index_update(tensor_unimodal, tl.index[max_location:, i], np.minimum.accumulate(tensor[max_location:, i]))
+
+    return tensor_unimodal
 
 
 def squared_l2_prox(tensor, parameter):
@@ -183,13 +199,16 @@ def l2_prox(tensor, parameter):
         \\end{equation}
     """
     norm = tl.norm(tensor)
-    bigger_value = tl.where(norm > parameter, norm, parameter)
+    if norm > parameter:
+        bigger_value = norm
+    else:
+        bigger_value = parameter
     return tensor - (tensor * parameter / bigger_value)
 
 
 def normalized_sparsity(tensor, threshold):
     """
-
+    Normalized sparsity operator by using hard thresholding.
     Parameters
     ----------
     tensor : ndarray
@@ -213,11 +232,12 @@ def normalized_sparsity(tensor, threshold):
         \\end{equation}
     """
     tensor_hard = hard_thresholding(tensor, threshold)
-    return tensor_hard / tl.norm(tensor_hard)
+    return tensor_hard / tl.max(tensor_hard)
 
 
 def soft_sparsity(tensor, parameter):
     """
+    Soft sparsity operator by using sof thresholding.
 
     Parameters
     ----------
@@ -253,7 +273,7 @@ def soft_sparsity(tensor, parameter):
     return tensor_soft
 
 
-def simplex(tensor):
+def simplex(tensor, parameter):
     """Proximal operator of simplex
 
     Parameters
@@ -276,13 +296,13 @@ def simplex(tensor):
     tensor_sort = tl.sort(tensor, axis=0, descending=True)
     tensor_cum = np.cumsum(tensor_sort, axis=0)
 
-    j = tl.sum(tensor_sort > (tensor_cum-1) / np.cumsum(tl.ones(tl.shape(tensor_cum)), axis=0), axis=0)
+    j = tl.sum(tensor_sort > (tensor_cum - parameter) / np.cumsum(tl.ones(tl.shape(tensor_cum)), axis=0), axis=0)
     theta = tl.zeros(col)
     for i in range(col):
         if j[i] > 0:
-            theta[i] = tensor_cum[j[i]-1, i]
-    theta = (theta - 1)/j
-    return tl.clip(tensor, 0, tl.max(tensor - theta))
+            theta = tl.index_update(theta, tl.index[i], tensor_cum[j[i] - 1, i])
+    theta = (theta - parameter)/j
+    return tl.clip(tensor - theta, a_min=0)
 
 
 def hard_thresholding(tensor, threshold):
@@ -291,13 +311,13 @@ def hard_thresholding(tensor, threshold):
     Parameters
     ----------
     tensor : ndarray
-    threshold :
+    threshold : float
 
     Returns
     -------
     ndarray
     """
-    return tl.where(tensor < threshold, 0, tensor)
+    return tl.where(tl.abs(tensor) > threshold, tensor, tl.abs(tensor) - tl.abs(tensor))
 
 
 def soft_thresholding(tensor, threshold):
