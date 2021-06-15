@@ -43,24 +43,34 @@ def test_normalized_sparsity():
     """Test for normalized_sparsity operator"""
     tensor = T.tensor([2, 3, 4])
     res = normalized_sparsity(tensor, 2.6)
-    true_res = T.tensor([0, 0.75, 1 ])
+    true_res = T.tensor([0, 0.6, 0.8])
     assert_array_almost_equal(true_res, res)
 
 
 def test_monotonicity():
     """Test for monotonicity operator"""
     tensor = T.tensor(np.random.rand(20, 10))
+    # Monotone increasing
     tensor_monoton = monotonicity(tensor)
+    assert_(np.all(np.diff(tensor_monoton, axis=0) >= 0))
+    # Monotone decreasing
+    tensor_monoton = monotonicity(tensor, decreasing=True)
     assert_(np.all(np.diff(tensor_monoton, axis=0) <= 0))
 
 
 def test_unimodality():
     """Test for unimdality operator"""
-    tensor = T.tensor(np.random.rand(10))
+    tensor = T.tensor(np.random.rand(10, 10))
     tensor_unimodal = unimodality(tensor)
-    max_location = T.argmax(tensor_unimodal)
-    assert_(np.all(np.diff(tensor_unimodal[:max_location], axis=0) >= 0))
-    assert_(np.all(np.diff(tensor_unimodal[max_location:], axis=0) <= 0))
+    for i in range(10):
+       max_location = T.argmax(tensor_unimodal[:, i])
+       if max_location == 0:
+           assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) <= 0))
+       elif max_location == (tl.shape(tensor)[0] - 1):
+           assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) >= 0))
+       else:
+           assert_(np.all(np.diff(tensor_unimodal[:int(max_location), i], axis=0) >= 0))
+           assert_(np.all(np.diff(tensor_unimodal[int(max_location):, i], axis=0) <= 0))
 
 
 def test_l2_prox():

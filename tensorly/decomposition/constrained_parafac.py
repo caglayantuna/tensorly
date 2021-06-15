@@ -16,7 +16,7 @@ from ..tenalg.proximal import admm, proximal_operator
 # License: BSD 3 clause
 
 def initialize_constrained_parafac(tensor, rank, constraints, reg_par=None, prox_par=None, init='svd', svd='numpy_svd', random_state=None):
-    r"""Initialize factors used in `parafac`.
+    r"""Initialize factors used in `constrained_parafac`.
 
     Parameters
     ----------
@@ -26,7 +26,8 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par=None, prox
     initialize the `m`th factor matrix using the `rank` left singular vectors
     of the `m`th unfolding of the input tensor. If init is a previously initialized `cp tensor`, all
     the weights are pulled in the last factor and then the weights are set to "1" for the output tensor.
-    Lastly, factors are updated with proximal operator according to the selected constraint(s).
+    Lastly, factors are updated with proximal operator according to the selected constraint(s), so that they satisfy the
+    imposed constraints (does not apply to cptensor initialization).
 
     Parameters
     ----------
@@ -91,6 +92,8 @@ def initialize_constrained_parafac(tensor, rank, constraints, reg_par=None, prox
                 weights_avg = tl.prod(weights) ** (1.0 / tl.shape(weights)[0])
                 for i in range(len(factors)):
                     factors[i] = factors[i] * weights_avg
+            kt = CPTensor((None, factors))
+            return kt
         except ValueError:
             raise ValueError(
                 'If initialization method is a mapping, then it must '
@@ -118,7 +121,11 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
     alternating direction method of multipliers (AO-ADMM):
 
     Computes a rank-`rank` decomposition of `tensor` [1]_ such that::
-        tensor = [|weights; factors[0], ..., factors[-1] |].
+        tensor = [|weights; factors[0], ..., factors[-1] |],
+    where factors are either penalized or constrained according to the user-defined constraint.
+
+    In order to compute the factors efficiently, the ADMM algorithm
+    introduces an auxilliary factor which is called factor_aux in the function.
 
     Parameters
     ----------
@@ -129,36 +136,39 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
         Maximum number of iteration for outer loop
     n_iter_max_inner : int
         Number of iteration for inner loop
-    init : {'svd', 'random'}, optional
+    init : {'svd', 'random', cptensor}, optional
         Type of factor matrix initialization. See `initialize_factors`.
     svd : str, default is 'numpy_svd'
         function to use to compute the SVD, acceptable values in tensorly.SVD_FUNS
     tol_outer : float, optional
         (Default: 1e-8) Relative reconstruction error tolerance for outer loop. The
-        algorithm is considered to have found the global minimum when the
-        reconstruction error is less than `tol_outer..
+        algorithm is considered to have found a local minimum when the
+        reconstruction error is less than `tol_outer`.
     tol_inner : float, optional
-        (Default: 1e-6) Absolute reconstruction error tolerance for factor update during
-        inner loop, i.e. ADMM optimization.
+        (Default: 1e-6) Absolute reconstruction error tolerance for factor update during inner loop, i.e. ADMM optimization.
     random_state : {None, int, np.random.RandomState}
     verbose : int, optional
         Level of verbosity
     return_errors : bool, optional
         Activate return of iteration errors
-    constraints : string, optional
+    constraints : string or list of strings, optional
         If there is only one constraint, this constraint is applied to all modes. Besides, any constraint can be defined
         for each mode by creating a list of constraints. List of possible constraints are as follows:
         {nonnegative, sparse_l1, l2, unimodality, normalize, simplex, normalized_sparsity, soft_sparsity, smoothness, monotonicity}
-    reg_par : float list, optional
+        For more information about a particular constraint, consult the documentation of the relevant constraints
+        function in tensorly.tenalg.proximal file. For the sake of simplicity, 'nonnegative' and 'normalize' constraints
+        have no specific function. Nonnegative constraint is clipping negative values to '0' and 'normalize' constraint
+        divides all the values by maximum value of the input array.
+    reg_par : float or list of float, optional
+        Amount of regularization (usually called the lambda parameter), applicable for regularized problems only.
         If there is only one parameter, this parameter will be used for each contraint.
-        Depending on the selected constraint, a parameter should be added.
-    prox_par : float list, optional
+    prox_par : float or list of float, optional
+        Parameters of the constraints. Refer to each constraint for more info.
         If there is only one parameter, this parameter will be used for each contraint.
-        Depending on the selected constraint, a parameter should be added.
     cvg_criterion : {'abs_rec_error', 'rec_error'}, optional
-       Stopping criterion for ALS, works if `tol` is not None.
-       If 'rec_error',  ALS stops at current iteration if ``(previous rec_error - current rec_error) < tol``.
-       If 'abs_rec_error', ALS terminates when `|previous rec_error - current rec_error| < tol`.
+       Stopping criterion if `tol` is not None.
+       If 'rec_error',  algorithm stops at current iteration if ``(previous rec_error - current rec_error) < tol``.
+       If 'abs_rec_error', algorithm terminates when `|previous rec_error - current rec_error| < tol`.
     fixed_modes : list, default is None
         A list of modes for which the initial value is not modified.
         The last mode cannot be fixed due to error computation.
@@ -207,10 +217,10 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
 
     # ADMM inits
     dual_var = []
-    factors_t = []
+    factors_aux = []
     for i in range(len(factors)):
         dual_var.append(tl.zeros(tl.shape(factors[i])))
-        factors_t.append(tl.transpose(tl.zeros(tl.shape(factors[i]))))
+        factors_aux.append(tl.transpose(tl.zeros(tl.shape(factors[i]))))
 
     for iteration in range(n_iter_max):
         if verbose > 1:
@@ -226,7 +236,7 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
 
             mttkrp = unfolding_dot_khatri_rao(tensor, (None, factors), mode)
 
-            factors[mode], factors_t[mode], dual_var[mode] = admm(mttkrp, pseudo_inverse, factors[mode], dual_var[mode],
+            factors[mode], factors_aux[mode], dual_var[mode] = admm(mttkrp, pseudo_inverse, factors[mode], dual_var[mode],
                                                                   n_iter_max=n_iter_max_inner, constraint=constraints[mode],
                                                                   reg_par=reg_par[mode], prox_par=prox_par[mode], tol=tol_inner)
 
@@ -236,7 +246,7 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
         rec_errors.append(rec_error)
         constraint_error = 0
         for mode in modes_list:
-            constraint_error += tl.norm(factors[mode] - tl.transpose(factors_t[mode])) / tl.norm(factors[mode])
+            constraint_error += tl.norm(factors[mode] - tl.transpose(factors_aux[mode])) / tl.norm(factors[mode])
         if tol_outer:
 
             if iteration >= 1:
@@ -271,4 +281,3 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
         return cp_tensor, rec_errors
     else:
         return cp_tensor
-
