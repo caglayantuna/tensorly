@@ -24,16 +24,16 @@ def test_hard_thresholding():
 
 def test_soft_sparsity():
     """Test for soft_sparsity operator"""
-    tensor = T.tensor([0.5, 0.3, 1.5])
+    tensor = T.tensor([[0.5, 1.3, 4.5], [0.8, 0.3, 2]])
     threshold = 2
     res = soft_sparsity(tensor, threshold)
-    true_res = T.tensor([0.4, 0.2, 1.4])
+    true_res = T.tensor([[0.85, 1.5, 2.],[1.15, 0.5, 0.]])
     assert_array_almost_equal(true_res, res)
 
 
 def test_simplex():
     """Test for simplex operator"""
-    tensor = T.tensor([[0.5, 1.3, 4.5],[0.8, 0.3, 2]])
+    tensor = T.tensor([[0.5, 1.3, 4.5], [0.8, 0.3, 2]])
     res = simplex(tensor, 1)
     true_res = T.tensor([[0.35, 1, 1],[0.65, 0, 0]])
     assert_array_almost_equal(true_res, res)

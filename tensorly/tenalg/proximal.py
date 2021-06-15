@@ -306,16 +306,7 @@ def soft_sparsity(tensor, parameter):
            \\lambda: prox_\\lambda (||tensor||_1) \leq parameter
         \\end{equation}
     """
-    total_non_zero = np.count_nonzero(tensor)
-    current_l1 = tl.sum(tl.abs(tensor))
-    if current_l1 <= parameter:
-        return tensor
-    elif current_l1 > parameter:
-        difference = current_l1 - parameter
-        threshold = difference/total_non_zero
-
-    tensor_soft = soft_thresholding(tensor, threshold)
-    return tensor_soft
+    return simplex(tl.abs(tensor), parameter) * tl.sign(tensor)
 
 
 def simplex(tensor, parameter):
@@ -342,7 +333,7 @@ def simplex(tensor, parameter):
     tensor_sort = tl.sort(tensor, axis=0, descending=True)
     tensor_cum = tl.cumsum(tensor_sort, axis=0)
 
-    j = tl.sum(tl.where(tensor_sort > (tensor_cum - parameter), 1., 0.), axis=0)
+    j = tl.sum(tl.where(tensor_sort > (tensor_cum - parameter), 1, 0), axis=0)
     theta = tl.zeros(col)
     for i in range(col):
         if j[i] > 0:

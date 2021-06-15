@@ -46,7 +46,8 @@ def test_constrained_parafac_l1():
     rank = 3
     reg_par = [1e-2, 1e-2, 1e-2]
     init = 'random'
-    weightsinit, facinit = initialize_constrained_parafac(T.zeros([6, 8, 4]), rank, constraints='sparse_l1', init=init)
+    weightsinit, facinit = initialize_constrained_parafac(T.zeros([6, 8, 4]), rank, constraints='sparse_l1', init=init,
+                                                          reg_par=reg_par)
     tensor = cp_to_tensor((weightsinit, facinit))
     for i in range(len(facinit)):
         facinit[i] += T.tensor(0.1 * rng.random_sample(tl.shape(facinit[i])), **tl.context(facinit[i]))
@@ -73,7 +74,8 @@ def test_constrained_parafac_l2():
     rank = 3
     reg_par = [1e-2, 1e-2, 1e-2]
     init = 'random'
-    weightsinit, facinit = initialize_constrained_parafac(T.zeros([6, 8, 4]), rank, constraints='l2', init=init)
+    weightsinit, facinit = initialize_constrained_parafac(T.zeros([6, 8, 4]), rank, constraints='l2', init=init,
+                                                          reg_par=reg_par)
     tensor = cp_to_tensor((weightsinit, facinit))
     for i in range(len(facinit)):
         facinit[i] += T.tensor(0.1 * rng.random_sample(tl.shape(facinit[i])), **tl.context(facinit[i]))
@@ -190,12 +192,12 @@ def test_constrained_parafac_soft_sparsity():
     for i in range(len(facinit)):
         facinit[i] += T.tensor(0.1 * rng.random_sample(tl.shape(facinit[i])), **tl.context(facinit[i]))
     tensorinit = CPTensor((weightsinit, facinit))
-    res, errors = constrained_parafac(tensor, constraints='soft_sparsity', rank=rank, init=tensorinit,
-                                      random_state=rng, return_errors=True, prox_par=prox_par,
-                                      tol_outer=1-16, n_iter_max=1000)
+    res, errors = constrained_parafac(tensor, constraints='soft_sparsity', rank=rank, init=tensorinit, random_state=rng, return_errors=True, prox_par=prox_par,
+                                      tol_outer=1-16)
     # Check if factors have l1 norm smaller than threshold
     for i in range(len(facinit)):
-        assert_(tl.norm(res.factors[i], 1) >= 1)
+        assert_(np.all(tl.norm(res.factors[i], 1, axis=0)) <= 1)
+
     res = cp_to_tensor(res)
     error = T.norm(res - tensor, 2)
     error /= T.norm(tensor, 2)
