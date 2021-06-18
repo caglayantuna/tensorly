@@ -14,9 +14,9 @@ def test_hard_thresholding():
     """Test for hard_thresholding operator"""
     tensor = T.tensor([[1, 2, 1.5], [4, -6, -0.5], [0.2, 1.2, -3.4]])
     copy_tensor = T.copy(tensor)
-    threshold = 1.1
+    threshold = 2
     res = hard_thresholding(tensor, threshold)
-    true_res = T.tensor([[0, 2, 1.5], [4, -6, 0], [0, 1.2, -3.4]])
+    true_res = T.tensor([[0, 0, 0], [4, -6, 0], [0, 0, 0]])
     assert_array_almost_equal(true_res, res)
     # Check that we did not change the original tensor
     assert_array_equal(copy_tensor, tensor)
@@ -27,7 +27,7 @@ def test_soft_sparsity():
     tensor = T.tensor([[0.5, 1.3, 4.5], [0.8, 0.3, 2]])
     threshold = 2
     res = soft_sparsity(tensor, threshold)
-    true_res = T.tensor([[0.85, 1.5, 2.],[1.15, 0.5, 0.]])
+    true_res = T.tensor([[0.85, 1.5, 2.], [1.15, 0.5, 0.]])
     assert_array_almost_equal(true_res, res)
 
 
@@ -42,7 +42,7 @@ def test_simplex():
 def test_normalized_sparsity():
     """Test for normalized_sparsity operator"""
     tensor = T.tensor([2, 3, 4])
-    res = normalized_sparsity(tensor, 2.6)
+    res = normalized_sparsity(tensor, 2)
     true_res = T.tensor([0, 0.6, 0.8])
     assert_array_almost_equal(true_res, res)
 
@@ -66,7 +66,7 @@ def test_unimodality():
        max_location = T.argmax(tensor_unimodal[:, i])
        if max_location == 0:
            assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) <= 0))
-       elif max_location == (tl.shape(tensor)[0] - 1):
+       elif max_location == (T.shape(tensor)[0] - 1):
            assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) >= 0))
        else:
            assert_(np.all(np.diff(tensor_unimodal[:int(max_location), i], axis=0) >= 0))
@@ -178,10 +178,10 @@ def test_admm():
     b = T.dot(a, true_res)
     atb = T.dot(T.transpose(a), b)
     ata = T.dot(T.transpose(a), a)
-    dual = tl.zeros(tl.shape(atb))
-    x_init = tl.zeros(tl.shape(atb))
-    x_admm, x_dual, dual_var  = admm(tl.transpose(atb), tl.transpose(ata), x=x_init, dual_var=dual)
-    assert_array_almost_equal(true_res, tl.transpose(x_admm), decimal=2)
+    dual = T.zeros(T.shape(atb))
+    x_init = T.zeros(T.shape(atb))
+    x_admm, x_dual, dual_var = admm(T.transpose(atb), T.transpose(ata), x=x_init, dual_var=dual)
+    assert_array_almost_equal(true_res, T.transpose(x_admm), decimal=2)
 
 
 @skip_tensorflow

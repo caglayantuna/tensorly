@@ -4,9 +4,8 @@ import warnings
 import tensorly as tl
 from ..random import random_cp
 from ..base import unfold
-from ..cp_tensor import (cp_to_tensor, CPTensor,
-                         unfolding_dot_khatri_rao, cp_norm,
-                         cp_normalize, validate_cp_rank)
+from ..cp_tensor import (CPTensor, unfolding_dot_khatri_rao, cp_norm,
+                         validate_cp_rank)
 from ..tenalg.proximal import admm, proximal_operator
 
 # Author: Jean Kossaifi
@@ -15,7 +14,9 @@ from ..tenalg.proximal import admm, proximal_operator
 
 # License: BSD 3 clause
 
-def initialize_constrained_parafac(tensor, rank, constraints, reg_par=None, prox_par=None, init='svd', svd='numpy_svd', random_state=None):
+
+def initialize_constrained_parafac(tensor, rank, constraints, reg_par=None, prox_par=None, init='svd', svd='numpy_svd',
+                                   random_state=None):
     r"""Initialize factors used in `constrained_parafac`.
 
     Parameters
@@ -237,8 +238,8 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
             mttkrp = unfolding_dot_khatri_rao(tensor, (None, factors), mode)
 
             factors[mode], factors_aux[mode], dual_var[mode] = admm(mttkrp, pseudo_inverse, factors[mode], dual_var[mode],
-                                                                  n_iter_max=n_iter_max_inner, constraint=constraints[mode],
-                                                                  reg_par=reg_par[mode], prox_par=prox_par[mode], tol=tol_inner)
+                                                                    n_iter_max=n_iter_max_inner, constraint=constraints[mode],
+                                                                    reg_par=reg_par[mode], prox_par=prox_par[mode], tol=tol_inner)
 
         factors_norm = cp_norm((weights, factors))
         iprod = tl.sum(tl.sum(mttkrp * factors[-1], axis=0) * weights)

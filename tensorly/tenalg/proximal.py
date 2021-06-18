@@ -124,24 +124,26 @@ def monotonicity(tensor, decreasing=False):
     """
     if tl.ndim(tensor) == 1:
         tensor = tl.reshape(tensor, [tl.shape(tensor)[0], 1])
+    tensor_to_modify = tl.copy(tensor)
     if decreasing:
-        tensor = tl.index_update(tensor, tl.index[::-1,:], tensor)
-    r, c = tl.shape(tensor)
-    S = tl.zeros([r, r, c])
+        tensor_to_modify = tl.flip(tensor_to_modify, axis=0)
+    r, c = tl.shape(tensor_to_modify)
+    assisted_tensor = tl.zeros([r, r, c])
 
     for i in range(r):
         for j in range(r):
             if j >= i:
-                S = tl.index_update(S, tl.index[i, j, :] , tl.sum(tensor[i: j + 1, :], axis=0) / (j - i + 1))
-    tensor_modified = tl.max(S, axis=0)
-    reversed_tensor = tl.index_update(tensor_modified, tl.index[::-1,:], tensor_modified)
+                assisted_tensor = tl.index_update(assisted_tensor, tl.index[i, j, :], tl.sum(tensor_to_modify[i: j + 1, :],
+                                                  axis=0) / (j - i + 1))
+    tensor_modified = tl.max(assisted_tensor, axis=0)
+    reversed_tensor = tl.flip(tensor_modified, axis=0)
     for i in range(r - 1):
         for j in range(c):
-            if reversed_tensor[i +1 , j] > reversed_tensor[i , j]:
-                  reversed_tensor = tl.index_update(reversed_tensor, tl.index[i +1 , j], reversed_tensor[i, j])
-    tensor_mon = tl.index_update(reversed_tensor, tl.index[::-1,:], reversed_tensor)
+            if reversed_tensor[i + 1, j] > reversed_tensor[i, j]:
+                reversed_tensor = tl.index_update(reversed_tensor, tl.index[i + 1, j], reversed_tensor[i, j])
+    tensor_mon = tl.flip(reversed_tensor, axis=0)
     if decreasing:
-        tensor_mon = tl.index_update(tensor_mon, tl.index[::-1,:], tensor_mon)
+        tensor_mon = tl.flip(tensor_mon, axis=0)
     return tensor_mon
 
 
@@ -179,20 +181,26 @@ def unimodality(tensor):
 
     for i in range(col):
         values = []
-        monotone_increasing = tl.tensor_to_vec(monotonicity(tensor[:, i]))
-        monotone_decreasing = tl.tensor_to_vec(monotonicity(tensor[:, i], decreasing=True))
+        difference = []
+        monotone_increasing = tl.tensor(tl.tensor_to_vec(monotonicity(tensor[:, i])), **tl.context(tensor))
+        monotone_decreasing = tl.tensor(tl.tensor_to_vec(monotonicity(tensor[:, i], decreasing=True)), **tl.context(tensor))
         for j in range(tensor.shape[0] - 1):
-            if tensor[j, i] > monotone_increasing[j - 1] and tensor[j, i] > monotone_decreasing[j + 1]:
-                  values.append(j)
+            if tensor[j, i] >= monotone_increasing[j - 1] and tensor[j, i] >= monotone_decreasing[j + 1]:
+                values.append(j)
+        if len(values) == 0:
+            if tl.argmax(tensor[:, i]) == 0:
+                tensor_unimodal = tl.index_update(tensor_unimodal, tl.index[:, i], monotone_decreasing[:])
+            elif tl.argmax(tensor[:, i]) == (tl.shape(tensor)[0] - 1):
+                tensor_unimodal = tl.index_update(tensor_unimodal, tl.index[:, i], monotone_increasing[:])
+        else:
             tensor_new = tl.zeros([tl.shape(tensor)[0], len(values)])
-            difference = []
             for m in range(len(values)):
                 tensor_new = tl.index_update(tensor_new, tl.index[:values[m], m], monotone_increasing[:values[m]])
                 tensor_new = tl.index_update(tensor_new, tl.index[values[m], m], tensor[values[m], i])
                 tensor_new = tl.index_update(tensor_new, tl.index[values[m]+1:, m], monotone_decreasing[values[m]+1:])
                 difference.append(tl.sum(tl.abs(tensor[:, i] - tensor_new[:, m])))
-        best_location = tl.argmin(difference)
-        tensor_unimodal[:, i] = tensor_new[:, best_location]
+            best_location = tl.argmin(tl.tensor(difference))
+            tensor_unimodal = tl.index_update(tensor_unimodal, tl.index[:, i], tensor_new[:, best_location])
     return tensor_unimodal
 
 
@@ -333,13 +341,14 @@ def simplex(tensor, parameter):
     tensor_sort = tl.sort(tensor, axis=0, descending=True)
     tensor_cum = tl.cumsum(tensor_sort, axis=0)
 
-    j = tl.sum(tl.where(tensor_sort > (tensor_cum - parameter), 1, 0), axis=0)
+    j = tl.sum(tl.where(tensor_sort > (tensor_cum - parameter), 1.0, 0.0), axis=0)
     theta = tl.zeros(col)
     for i in range(col):
         if j[i] > 0:
-            theta = tl.index_update(theta, tl.index[i], tensor_cum[j[i] - 1, i])
+            theta = tl.index_update(theta, tl.index[i], tensor_cum[int(j[i] - 1), i])
     theta = (theta - parameter) / j
     return tl.clip(tensor - theta, a_min=0)
+
 
 
 def hard_thresholding(tensor, threshold):
@@ -356,7 +365,10 @@ def hard_thresholding(tensor, threshold):
     -------
     ndarray
     """
-    return tl.where(tl.abs(tensor) > threshold, tensor, tl.abs(tensor) - tl.abs(tensor))
+    tensor_vec = tl.copy(tl.tensor_to_vec(tensor))
+    sorted = tl.sort(tl.abs(tensor_vec), axis=0, descending=True)
+    new_threshold = sorted[threshold]
+    return tl.where(tl.abs(tensor) > new_threshold, tensor, tl.abs(tensor) - tl.abs(tensor))
 
 
 def soft_thresholding(tensor, threshold):
