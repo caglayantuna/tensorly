@@ -201,6 +201,7 @@ _FUN_NAMES = [
     (tfm.sin, 'sin'),
     (tfm.cos, 'cos'),
     (tfm.cumsum, 'cumsum'),
+    (tfm.count_nonzero, 'count_nonzero'),
     (tfm.reduce_any, 'any')
     ]
 for source_fun, target_fun_name in _FUN_NAMES:

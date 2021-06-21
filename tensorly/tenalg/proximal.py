@@ -351,7 +351,7 @@ def simplex(tensor, parameter):
 
 
 
-def hard_thresholding(tensor, threshold):
+def hard_thresholding(tensor, number_of_non_zero):
     """
     Proximal operator of the l0 ``norm''
     Finds the entries of input tensor below threshold and sets them to zero, leaving the other entries untouched.
@@ -359,16 +359,28 @@ def hard_thresholding(tensor, threshold):
     Parameters
     ----------
     tensor : ndarray
-    threshold : float
+    number_of_non_zero : int
 
     Returns
     -------
     ndarray
     """
     tensor_vec = tl.copy(tl.tensor_to_vec(tensor))
-    sorted = tl.sort(tl.abs(tensor_vec), axis=0, descending=True)
-    new_threshold = sorted[threshold]
-    return tl.where(tl.abs(tensor) > new_threshold, tensor, tl.abs(tensor) - tl.abs(tensor))
+    sorted_vector = tl.sort(tl.abs(tensor_vec), axis=0, descending=True)
+    threshold = sorted_vector[number_of_non_zero]
+    tensor_hard = tl.where(tl.abs(tensor) > threshold, tensor, tl.abs(tensor) - tl.abs(tensor))
+    # next lines solve if there are some values equal to threshold but should not be changed
+    if tl.count_nonzero(tensor_hard) != number_of_non_zero:
+        current_nonzeros = tl.count_nonzero(tensor_hard)
+        to_change = number_of_non_zero - current_nonzeros
+        tensor_temp = tl.where(tl.abs(tensor_vec) <= threshold, tensor_vec, tl.abs(tensor_vec) - tl.abs(tensor_vec))
+        tensor_hard_vec = tl.copy(tl.tensor_to_vec(tensor_hard))
+        for i in range(to_change):
+            max_indice = tl.argmax(tl.abs(tensor_temp))
+            tensor_hard_vec = tl.index_update(tensor_hard_vec, tl.index[max_indice], tensor_vec[max_indice])
+            tensor_temp = tl.index_update(tensor_temp, tl.index[max_indice], tensor_temp[max_indice] - tensor_temp[max_indice])
+        tensor_hard = tl.reshape(tensor_hard_vec, tl.shape(tensor))
+    return tensor_hard
 
 
 def soft_thresholding(tensor, threshold):

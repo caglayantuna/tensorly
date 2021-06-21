@@ -332,6 +332,20 @@ class Backend(object):
         raise NotImplementedError
 
     @staticmethod
+    def count_nonzero(tensor):
+        """Returns number of non-zero elements in the tensor.
+
+        Parameters
+        ----------
+        tensor : tensor
+
+        Returns
+        -------
+        out : scalar
+        """
+        raise NotImplementedError
+
+    @staticmethod
     def trace(tensor):
         """Returns sum of the elements on the diagonal of the tensor.
 
