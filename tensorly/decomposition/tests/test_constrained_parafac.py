@@ -3,7 +3,7 @@ import pytest
 from ...cp_tensor import cp_to_tensor
 from ..constrained_parafac import *
 from ... import backend as T
-from ...testing import assert_array_equal, assert_
+from ...testing import assert_array_equal, assert_, assert_array_almost_equal
 
 
 def test_constrained_parafac_nonnegative():
@@ -159,18 +159,10 @@ def test_constrained_parafac_normalize():
         facinit[i] += T.tensor(0.1 * rng.random_sample(T.shape(facinit[i])), **T.context(facinit[i]))
     tensorinit = CPTensor((weightsinit, facinit))
     res, errors = constrained_parafac(tensor, constraints='normalize', rank=rank, init=tensorinit,
-                                      random_state=rng, return_errors=True, tol_outer=1-16, n_iter_max=1000)
+                                      random_state=rng, return_errors=True)
     # Check if maximum values is 1
     for i in range(len(facinit)):
         assert_(T.max(res.factors[i]) == 1)
-    res = cp_to_tensor(res)
-    error = T.norm(res - tensor, 2)
-    error /= T.norm(tensor, 2)
-    assert_(error < tol_norm_2,
-            f'norm 2 of reconstruction higher = {error} than tolerance={tol_norm_2}')
-    # Test the max abs difference between the reconstruction and the tensor
-    assert_(T.max(T.abs(res - tensor)) < tol_max_abs,
-            f'abs norm of reconstruction error = {T.max(T.abs(res - tensor))} higher than tolerance={tol_max_abs}')
 
 
 def test_constrained_parafac_soft_sparsity():
@@ -213,7 +205,8 @@ def test_constrained_parafac_normalized_sparsity():
     rank = 3
     init = 'random'
     prox_par = [5, 5, 5]
-    weightsinit, facinit = initialize_constrained_parafac(T.zeros([6, 8, 4]), rank, constraints='normalized_sparsity', init=init)
+    weightsinit, facinit = initialize_constrained_parafac(T.zeros([6, 8, 4]), rank, constraints='normalized_sparsity',
+                                                          init=init, prox_par=prox_par)
     tensor = cp_to_tensor((weightsinit, facinit))
     for i in range(len(facinit)):
         facinit[i] += T.tensor(0.1 * rng.random_sample(T.shape(facinit[i])), **T.context(facinit[i]))
