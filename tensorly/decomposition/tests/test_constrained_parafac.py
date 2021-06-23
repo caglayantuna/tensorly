@@ -218,3 +218,25 @@ def test_constrained_parafac_normalized_sparsity():
     for i in range(len(facinit)):
          assert_(T.norm(res.factors[i]) <= 1)
          assert_(np.count_nonzero(res.factors[i]) == 5)
+
+
+def test_constrained_parafac_hard_sparsity():
+    """Test for the CANDECOMP-PARAFAC decomposition with ADMM normalized sparsity constraint
+    """
+    rng = tl.check_random_state(1234)
+    rank = 3
+    init = 'random'
+    prox_par = [5, 5, 5]
+    weightsinit, facinit = initialize_constrained_parafac(T.zeros([6, 8, 4]), rank, constraints='hard_sparsity',
+                                                          init=init, prox_par=prox_par)
+    tensor = cp_to_tensor((weightsinit, facinit))
+    for i in range(len(facinit)):
+        facinit[i] += T.tensor(0.1 * rng.random_sample(tl.shape(facinit[i])), **tl.context(facinit[i]))
+    tensorinit = CPTensor((weightsinit, facinit))
+    res, errors = constrained_parafac(tensor, constraints='hard_sparsity', rank=rank, init=tensorinit,
+                                      random_state=rng, return_errors=True, prox_par=prox_par,
+                                      tol_outer=1-16)
+    # Check if factors are normalized and k-sparse
+    for i in range(len(facinit)):
+         assert_(T.count_nonzero(res.factors[i]) == 5)
+

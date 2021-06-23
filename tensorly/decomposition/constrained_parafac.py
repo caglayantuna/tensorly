@@ -155,7 +155,7 @@ def constrained_parafac(tensor, rank, n_iter_max=100, n_iter_max_inner=10,
     constraints : string or list of strings, optional
         If there is only one constraint, this constraint is applied to all modes. Besides, any constraint can be defined
         for each mode by creating a list of constraints. List of possible constraints are as follows:
-        {nonnegative, sparse_l1, l2, unimodality, normalize, simplex, normalized_sparsity, soft_sparsity, smoothness, monotonicity}
+        {nonnegative, sparse_l1, l2, unimodality, normalize, simplex, normalized_sparsity, soft_sparsity, smoothness, monotonicity, hard_sparsity}
         For more information about a particular constraint, consult the documentation of the relevant constraints
         function in tensorly.tenalg.proximal file. For the sake of simplicity, 'nonnegative' and 'normalize' constraints
         have no specific function. Nonnegative constraint is clipping negative values to '0' and 'normalize' constraint

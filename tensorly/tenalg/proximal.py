@@ -13,15 +13,16 @@ def proximal_operator(tensor, constraint, reg_par=None, prox_par=None):
     """
     Proximal operator solves a convex optimization problem. Let f be a
     convex proper lower-semicontinuous function, the proximal operator of f is :math:`\\argmin_x(f(x) + 1/2||x - v||_2^2)`.
-    This operator can be used to solve constrained optimization problems as a generalization to projections on convex sets. Therefore, proximal gradients are used for constrained tensor decomposition problems in the literature.
+    This operator can be used to solve constrained optimization problems as a generalization to projections on convex sets.
+    Therefore, proximal gradients are used for constrained tensor decomposition problems in the literature.
 
     Parameters
     ----------
     tensor : ndarray
     constraint : string
-             Constraint options : nonnegative, sparse_l1, l2, unimodality,
-                                  normalize, simplex, normalized_sparsity,
-                                  soft_sparsity, smoothness, monotonicity
+             Constraint options : nonnegative, sparse_l1, l2, L2_square,
+                                  unimodality, normalize, simplex, normalized_sparsity,
+                                  soft_sparsity, smoothness, monotonicity, hard_sparsity
              For more information about a particular constraint, consult the documentation of the relevant constraints
              function in tensorly.tenalg.proximal file. For the sake of simplicity, 'nonnegative' and 'normalize' constraints
              have no specific function. Nonnegative constraint is clipping negative values to '0' and 'normalize' constraint
@@ -47,7 +48,7 @@ def proximal_operator(tensor, constraint, reg_par=None, prox_par=None):
     if reg_par is None:
         reg_par = 1e-3
     if prox_par is None:
-        prox_par = 0.1
+        prox_par = 1
 
     if constraint is None:
         return tensor
@@ -73,6 +74,8 @@ def proximal_operator(tensor, constraint, reg_par=None, prox_par=None):
         return smoothness(tensor)
     elif constraint == 'monotonicity':
         return monotonicity(tensor)
+    elif constraint == 'hard_sparsity':
+        return hard_thresholding(tensor, prox_par)
 
 
 def smoothness(tensor):
