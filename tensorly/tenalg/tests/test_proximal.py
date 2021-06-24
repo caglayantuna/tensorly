@@ -1,7 +1,10 @@
 import numpy as np
 
 from ... import backend as T
-from ..proximal import *
+from ..proximal import (svd_thresholding, soft_thresholding, hals_nnls, fista,
+                        active_set_nnls, procrustes, hard_thresholding, soft_sparsity,
+                        simplex, normalized_sparsity, monotonicity, unimodality, l2_prox,
+                        squared_l2_prox, admm)
 from ...testing import assert_, assert_array_equal, assert_array_almost_equal
 from tensorly import tensor_to_vec
 import pytest
@@ -63,14 +66,14 @@ def test_unimodality():
     tensor = T.tensor(np.random.rand(10, 10))
     tensor_unimodal = unimodality(tensor)
     for i in range(10):
-       max_location = T.argmax(tensor_unimodal[:, i])
-       if max_location == 0:
-           assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) <= 0))
-       elif max_location == (T.shape(tensor)[0] - 1):
-           assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) >= 0))
-       else:
-           assert_(np.all(np.diff(tensor_unimodal[:int(max_location), i], axis=0) >= 0))
-           assert_(np.all(np.diff(tensor_unimodal[int(max_location):, i], axis=0) <= 0))
+        max_location = T.argmax(tensor_unimodal[:, i])
+        if max_location == 0:
+            assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) <= 0))
+        elif max_location == (T.shape(tensor)[0] - 1):
+            assert_(np.all(np.diff(tensor_unimodal[:, i], axis=0) >= 0))
+        else:
+            assert_(np.all(np.diff(tensor_unimodal[:int(max_location), i], axis=0) >= 0))
+            assert_(np.all(np.diff(tensor_unimodal[int(max_location):, i], axis=0) <= 0))
 
 
 def test_l2_prox():

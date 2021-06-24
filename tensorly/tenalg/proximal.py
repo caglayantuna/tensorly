@@ -357,7 +357,7 @@ def simplex(tensor, parameter):
 def hard_thresholding(tensor, number_of_non_zero):
     """
     Proximal operator of the l0 ``norm''
-    Finds the entries of input tensor below threshold and sets them to zero, leaving the other entries untouched.
+    Keeps greater "number_of_non_zero" elements untouched and sets other elements to zero.
 
     Parameters
     ----------
