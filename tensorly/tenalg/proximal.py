@@ -121,9 +121,8 @@ def monotonicity(tensor, decreasing=False):
 
     References
     ----------
-    .. [1]: Schenker, C., Cohen, J. E., & Acar, E. (2020). A Flexible Optimization Framework for
-            Regularized Matrix-Tensor Factorizations with Linear Couplings.
-            IEEE Journal of Selected Topics in Signal Processing.
+    .. [1]: G. Chierchia, E. Chouzenoux, P. L. Combettes, and J.-C. Pesquet. 
+            "The Proximity Operator Repository. User's guide"
     """
     if tl.ndim(tensor) == 1:
         tensor = tl.reshape(tensor, [tl.shape(tensor)[0], 1])
